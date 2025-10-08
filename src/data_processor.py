@@ -20,29 +20,23 @@ class DataProcessor:
         self.thesis_data = None
         self.papers_data = None
         self.processed_data = {}
+        logger.info(f"📂 Initialized DataProcessor with data path: {self.data_path}")
     
     def load_raw_data(self):
-        """Load raw datasets from CSV files"""
-        try:
-            # Load thesis annotations
-            thesis_file = self.data_path / "debugging_agents_synthetic_annotations.csv"
-            if thesis_file.exists():
-                self.thesis_data = pd.read_csv(thesis_file)
-                logger.info(f"✅ Loaded thesis data: {len(self.thesis_data)} sections")
-            else:
-                logger.warning(f"⚠️ Thesis data file not found: {thesis_file}")
-            
-            # Load papers metadata
-            papers_file = self.data_path / "synthetic_pdf_papers_dataset.csv"
-            if papers_file.exists():
-                self.papers_data = pd.read_csv(papers_file)
-                logger.info(f"✅ Loaded papers data: {len(self.papers_data)} papers")
-            else:
-                logger.warning(f"⚠️ Papers data file not found: {papers_file}")
-                
-        except Exception as e:
-            logger.error(f"❌ Error loading data: {e}")
-            raise
+        """Load raw datasets from CSV files if they exist"""
+        # Load thesis annotations if available
+        thesis_file = self.data_path / "debugging_agents_synthetic_annotations.csv"
+        if thesis_file.exists():
+            self.thesis_data = pd.read_csv(thesis_file)
+            logger.info(f"✅ Loaded thesis data: {len(self.thesis_data)} sections")
+        
+        # Load papers metadata if available
+        papers_file = self.data_path / "synthetic_pdf_papers_dataset.csv"
+        if papers_file.exists():
+            self.papers_data = pd.read_csv(papers_file)
+            logger.info(f"✅ Loaded papers data: {len(self.papers_data)} papers")
+        
+        logger.info("✅ Raw data loading complete")
     
     def clean_thesis_data(self):
         """Clean and preprocess thesis data"""

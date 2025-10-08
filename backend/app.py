@@ -16,15 +16,26 @@ from pathlib import Path
 
 # Import our custom modules
 import sys
-sys.path.append('../src')
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent / 'src'))
 from data_processor import DataProcessor
 from thesis_analyzer import ThesisAnalyzer
+from data_agent import DataAgent
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# Configure upload settings
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'uploads')
+
+# Ensure upload directory exists
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Global instances
-data_processor = DataProcessor()
+data_dir = Path(__file__).parent.parent / 'data'
+os.makedirs(data_dir, exist_ok=True)  # Ensure data directory exists
+data_agent = DataAgent(str(data_dir))
 thesis_analyzer = ThesisAnalyzer()
 agent_status = {}
 task_queue = []
@@ -35,7 +46,7 @@ class AgentCoordinator:
     
     def __init__(self):
         self.agents = {
-            'data_agent': DataAgent(),
+            'data_agent': DataAgentWrapper(),
             'analysis_agent': AnalysisAgent(),
             'visualization_agent': VisualizationAgent(),
             'report_agent': ReportAgent()
@@ -171,18 +182,18 @@ class BaseAgent:
             'message': message
         })
 
-class DataAgent(BaseAgent):
-    """Handles data processing tasks"""
+class DataAgentWrapper(BaseAgent):
+    """Wrapper for DataAgent to integrate with the agent system"""
     
     def __init__(self):
         super().__init__('Data Agent', ['data_processing', 'data_cleaning', 'data_validation'])
+        self.data_agent = data_agent  # Use the global data_agent instance
     
     def execute_task(self, task):
         """Execute data processing task"""
         super().execute_task(task)
         
         if task['type'] == 'data_processing':
-            # Process the thesis data
             try:
                 data_processor.process_all()
                 self.log("Data processing completed successfully")
@@ -380,13 +391,59 @@ def not_found(error):
 def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
+@app.route('/api/upload', methods=['POST'])
+def upload_file():
+    """Handle file upload and processing"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'status': 'error', 'message': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'status': 'error', 'message': 'No file selected'}), 400
+        
+        if not file.filename.lower().endswith('.csv'):
+            return jsonify({'status': 'error', 'message': 'Only CSV files are supported'}), 400
+        
+        # Create a secure filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{file.filename}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Ensure the upload directory exists
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        
+        # Save the uploaded file
+        file.save(file_path)
+        print(f"File saved to: {file_path}")  # Debug log
+        
+        # Process the file using DataAgent
+        result = data_agent.process_uploaded_csv(file_path)
+        print(f"Processing result: {result}")  # Debug log
+        
+        # Add task to the coordinator
+        if result['status'] == 'success':
+            task_id = coordinator.add_task('data_processing', {
+                'input_file': result['input_file'],
+                'output_file': result['output_file'],
+                'dataset_type': result['dataset_type']
+            })
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 if __name__ == '__main__':
     # Create necessary directories
-    os.makedirs('../reports', exist_ok=True)
-    os.makedirs('../data/processed', exist_ok=True)
+    for dir_path in ['reports', 'data/processed', 'data/uploads', 'data/raw', 'data/validation']:
+        os.makedirs(os.path.join(os.path.dirname(__file__), '..', dir_path), exist_ok=True)
     
     print("🚀 Starting Debugging Agents Research Platform...")
     print("📊 Multi-agent system initialized")
-    print("🌐 Web interface available at http://localhost:5000")
+    print("🌐 Web interface available at http://localhost:5001")
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='localhost', port=5002)
