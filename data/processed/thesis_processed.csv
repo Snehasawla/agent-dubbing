@@ -1,0 +1,25 @@
+section_id,section_title,level,estimated_pages,num_figures,num_tables,num_equations,key_concepts,research_questions,methods,dataset_names,metrics,summary_tokens,difficulty_score,priority_for_extraction,has_algorithms,has_case_study,has_limitations,content_density,complexity_score,section_type
+S101,Abstract,1,1,0,0,0,debugging agents; reliability; autonomy,What problem and results?,Abstract mining,,,170,2,High,0,0,0,0.0,0.0,Other
+S102,Introduction,1,3,0,0,0,motivation; contributions; scope,Why agents? What gaps?,Narrative synthesis,,,610,3,High,0,0,0,0.0,0.0,Other
+S103,Related Work,1,5,0,1,0,program repair; static/dynamic analysis,What prior art and gaps?,Systematic review,,coverage; recency,920,3,Medium,0,0,0,0.2,0.6000000000000001,Background
+S104,Background,1,4,2,1,3,RL; transformers; knowledge graphs,What foundations?,Concept exposition,,,700,3,Medium,0,0,0,1.5,4.5,Background
+S105,Problem Statement,1,2,0,0,0,fault localization; patch validation,What is the formal objective?,Formalization,,clarity; scope,350,4,High,0,0,0,0.0,0.0,Other
+S106,Methodology Overview,1,3,1,0,1,multi-agent coordination; tool-use,How do agents collaborate?,Design science,,novelty; feasibility,520,5,High,1,0,0,0.6666666666666666,3.333333333333333,Methodology
+S107,System Architecture,1,5,3,1,2,orchestrator; retriever; executor; verifier,What are components and flow?,Architecture modeling,,modularity; latency,910,4,High,1,0,0,1.2,4.8,Other
+S108,Agent Orchestrator,2,3,2,0,0,task routing; retries,How are tasks scheduled?,Algorithm spec,,throughput; queue_time,530,4,High,1,0,0,0.6666666666666666,2.6666666666666665,Other
+S109,Retriever Agent,2,2,1,0,0,semantic code search; embeddings,How is context fetched?,Embedding retrieval,CodeSearchNet; GH BigQuery,MRR; Recall@k,340,3,Medium,1,0,0,0.5,1.5,Other
+S110,Reasoner Agent,2,3,1,0,1,planning; toolformer; CoT,How are plans generated?,Prompt engineering,,success_rate; steps,560,5,High,1,0,0,0.6666666666666666,3.333333333333333,Other
+S111,Executor Agent,2,3,1,1,0,sandbox; testing; patching,How are patches validated?,Differential testing,Defects4J; Bugs.jar,pass_rate; regression_rate,550,5,High,1,1,0,0.6666666666666666,3.333333333333333,Other
+S112,Verifier Agent,2,2,0,1,0,invariants; specs,How is correctness checked?,Invariant checking,,precision; recall,360,4,High,1,0,0,0.5,2.0,Other
+S113,Datasets,1,3,0,2,0,defect corpora; logs,Which datasets used?,Curation,Defects4J; QuixBugs; ManyBugs,size; diversity,520,3,Medium,0,0,0,0.6666666666666666,2.0,Other
+S114,Experimental Setup,1,4,1,2,0,baselines; ablations; compute,What configs and seeds?,Reproducible pipelines,,GPU_hours; seed_count,710,4,High,0,1,0,0.75,3.0,Results
+S115,Results,1,6,4,3,1,fix rate; time-to-fix,How do we compare?,Statistical analysis,,fix_rate; time_to_fix,1090,5,High,0,1,0,1.3333333333333333,6.666666666666666,Results
+S116,Discussion,1,3,1,0,0,failure modes; generalization,What insights emerged?,Qualitative analysis,,themes,540,3,High,0,1,1,0.3333333333333333,1.0,Conclusion
+S117,Case Studies,1,3,3,0,0,real bug traces; steps,What happened in practice?,Narrative case study,InternalRepo-1; OSS-A,fix_quality; steps,530,2,Medium,0,1,0,1.0,2.0,Other
+S118,Limitations,1,2,0,0,0,compute; data leakage,Where does it fail?,Critical appraisal,,coverage,360,2,High,0,0,1,0.0,0.0,Other
+S119,Threats to Validity,1,2,0,0,0,internal; external; construct,What could bias results?,Risk assessment,,risk_count,360,3,High,0,0,1,0.0,0.0,Other
+S120,Conclusion,1,2,0,0,0,impact; implications,What are takeaways?,Synthesis,,,350,2,High,0,0,0,0.0,0.0,Conclusion
+S121,Future Work,1,2,0,0,0,scaling; multimodal; continual,What next?,Roadmapping,,,360,1,Medium,0,0,0,0.0,0.0,Conclusion
+S122,Appendix A: Prompts,1,3,0,0,0,prompt library; templates,Which prompts used?,Artifact listing,,,540,1,Medium,0,0,0,0.0,0.0,Other
+S123,Appendix B: Configs,1,2,0,1,0,hyperparameters; configs,What tuning?,Configuration tables,,completeness,360,1,Medium,0,0,0,0.5,0.5,Other
+S124,Acknowledgements,1,1,0,0,0,funding; support,Who supported?,Statement,,,120,1,Low,0,0,0,0.0,0.0,Other

@@ -47,14 +47,18 @@ class DataProcessor:
         # Create a copy for processing
         df = self.thesis_data.copy()
         
-        # Handle missing values
-        df = df.fillna({
-            'estimated_pages': 0,
-            'num_figures': 0,
-            'num_tables': 0,
-            'num_equations': 0,
-            'difficulty_score': df['difficulty_score'].median()
-        })
+        # Handle missing values - only for columns that exist
+        fillna_dict = {}
+        numeric_columns = ['estimated_pages', 'num_figures', 'num_tables', 'num_equations']
+        for col in numeric_columns:
+            if col in df.columns:
+                fillna_dict[col] = 0
+        
+        if 'difficulty_score' in df.columns:
+            fillna_dict['difficulty_score'] = df['difficulty_score'].median() if not df['difficulty_score'].isna().all() else 0
+        
+        if fillna_dict:
+            df = df.fillna(fillna_dict)
         
         # Convert boolean columns to int for consistency
         bool_columns = ['has_algorithms', 'has_case_study', 'has_limitations']
@@ -62,9 +66,14 @@ class DataProcessor:
             if col in df.columns:
                 df[col] = df[col].astype(int)
         
-        # Create derived features
-        df['content_density'] = (df['num_figures'] + df['num_tables'] + df['num_equations']) / df['estimated_pages'].clip(lower=1)
-        df['complexity_score'] = df['difficulty_score'] * df['content_density']
+        # Create derived features - only if required columns exist
+        if all(col in df.columns for col in ['num_figures', 'num_tables', 'num_equations', 'estimated_pages']):
+            df['content_density'] = (df['num_figures'] + df['num_tables'] + df['num_equations']) / df['estimated_pages'].clip(lower=1)
+            if 'difficulty_score' in df.columns:
+                df['complexity_score'] = df['difficulty_score'] * df['content_density']
+        elif 'difficulty_score' in df.columns:
+            # If we have difficulty_score but not the other columns, just use difficulty_score
+            df['complexity_score'] = df['difficulty_score']
         
         # Categorize sections by type
         def categorize_section(title):
@@ -80,7 +89,11 @@ class DataProcessor:
             else:
                 return 'Other'
         
-        df['section_type'] = df['section_title'].apply(categorize_section)
+        # Categorize sections by type - only if section_title exists
+        if 'section_title' in df.columns:
+            df['section_type'] = df['section_title'].apply(categorize_section)
+        else:
+            logger.warning("⚠️ 'section_title' column not found, skipping section categorization")
         
         self.processed_data['thesis_clean'] = df
         logger.info("✅ Thesis data cleaned and processed")
@@ -94,13 +107,19 @@ class DataProcessor:
         # Create a copy for processing
         df = self.papers_data.copy()
         
-        # Handle missing values
-        df = df.fillna({
-            'pages': df['pages'].median(),
-            'references_count': df['references_count'].median(),
-            'citations': 0,
-            'readability_score': df['readability_score'].median()
-        })
+        # Handle missing values - only for columns that exist
+        fillna_dict = {}
+        if 'pages' in df.columns:
+            fillna_dict['pages'] = df['pages'].median() if not df['pages'].isna().all() else 0
+        if 'references_count' in df.columns:
+            fillna_dict['references_count'] = df['references_count'].median() if not df['references_count'].isna().all() else 0
+        if 'citations' in df.columns:
+            fillna_dict['citations'] = 0
+        if 'readability_score' in df.columns:
+            fillna_dict['readability_score'] = df['readability_score'].median() if not df['readability_score'].isna().all() else 0
+        
+        if fillna_dict:
+            df = df.fillna(fillna_dict)
         
         # Convert boolean columns
         bool_columns = ['has_code', 'has_appendix', 'has_acknowledgements']
@@ -108,32 +127,35 @@ class DataProcessor:
             if col in df.columns:
                 df[col] = df[col].astype(int)
         
-        # Create derived features
-        df['citations_per_year'] = df['citations'] / (2024 - df['year'] + 1)
-        df['references_per_page'] = df['references_count'] / df['pages']
-        df['complexity_index'] = (df['sections'] + df['subsections']) / df['pages']
+        # Create derived features - only if required columns exist
+        if 'citations' in df.columns and 'year' in df.columns:
+            df['citations_per_year'] = df['citations'] / (2024 - df['year'] + 1)
+        if 'references_count' in df.columns and 'pages' in df.columns:
+            df['references_per_page'] = df['references_count'] / df['pages']
+        if all(col in df.columns for col in ['sections', 'subsections', 'pages']):
+            df['complexity_index'] = (df['sections'] + df['subsections']) / df['pages']
         
-        # Categorize papers by impact
-        def categorize_impact(citations):
-            if citations >= 200:
-                return 'High Impact'
-            elif citations >= 50:
-                return 'Medium Impact'
-            else:
-                return 'Low Impact'
+        # Categorize papers by impact - only if citations column exists
+        if 'citations' in df.columns:
+            def categorize_impact(citations):
+                if citations >= 200:
+                    return 'High Impact'
+                elif citations >= 50:
+                    return 'Medium Impact'
+                else:
+                    return 'Low Impact'
+            df['impact_category'] = df['citations'].apply(categorize_impact)
         
-        df['impact_category'] = df['citations'].apply(categorize_impact)
-        
-        # Categorize by readability
-        def categorize_readability(score):
-            if score >= 50:
-                return 'High Readability'
-            elif score >= 40:
-                return 'Medium Readability'
-            else:
-                return 'Low Readability'
-        
-        df['readability_category'] = df['readability_score'].apply(categorize_readability)
+        # Categorize by readability - only if readability_score exists
+        if 'readability_score' in df.columns:
+            def categorize_readability(score):
+                if score >= 50:
+                    return 'High Readability'
+                elif score >= 40:
+                    return 'Medium Readability'
+                else:
+                    return 'Low Readability'
+            df['readability_category'] = df['readability_score'].apply(categorize_readability)
         
         self.processed_data['papers_clean'] = df
         logger.info("✅ Papers data cleaned and processed")
@@ -146,12 +168,12 @@ class DataProcessor:
             thesis_df = self.processed_data['thesis_clean']
             summary['thesis'] = {
                 'total_sections': len(thesis_df),
-                'total_pages': thesis_df['estimated_pages'].sum(),
-                'avg_difficulty': thesis_df['difficulty_score'].mean(),
-                'sections_with_algorithms': thesis_df['has_algorithms'].sum(),
-                'sections_with_case_studies': thesis_df['has_case_study'].sum(),
-                'high_priority_sections': len(thesis_df[thesis_df['priority_for_extraction'] == 'High']),
-                'section_types': thesis_df['section_type'].value_counts().to_dict()
+                'total_pages': thesis_df['estimated_pages'].sum() if 'estimated_pages' in thesis_df.columns else 0,
+                'avg_difficulty': thesis_df['difficulty_score'].mean() if 'difficulty_score' in thesis_df.columns else None,
+                'sections_with_algorithms': thesis_df['has_algorithms'].sum() if 'has_algorithms' in thesis_df.columns else 0,
+                'sections_with_case_studies': thesis_df['has_case_study'].sum() if 'has_case_study' in thesis_df.columns else 0,
+                'high_priority_sections': len(thesis_df[thesis_df['priority_for_extraction'] == 'High']) if 'priority_for_extraction' in thesis_df.columns else 0,
+                'section_types': thesis_df['section_type'].value_counts().to_dict() if 'section_type' in thesis_df.columns else {}
             }
         
         if 'papers_clean' in self.processed_data:
@@ -199,10 +221,26 @@ class DataProcessor:
             return None
         
         thesis_df = self.processed_data['thesis_clean']
-        high_priority = thesis_df[thesis_df['priority_for_extraction'] == 'High'].copy()
-        high_priority = high_priority.sort_values('difficulty_score', ascending=False)
         
-        return high_priority[['section_title', 'level', 'difficulty_score', 'section_type', 'has_algorithms']]
+        # Check if required columns exist
+        if 'priority_for_extraction' not in thesis_df.columns:
+            logger.warning("⚠️ 'priority_for_extraction' column not found")
+            return None
+        
+        high_priority = thesis_df[thesis_df['priority_for_extraction'] == 'High'].copy()
+        
+        # Sort by difficulty_score if it exists, otherwise just return
+        if 'difficulty_score' in high_priority.columns:
+            high_priority = high_priority.sort_values('difficulty_score', ascending=False)
+        
+        # Return only columns that exist
+        available_cols = ['section_title', 'level', 'difficulty_score', 'section_type', 'has_algorithms']
+        return_cols = [col for col in available_cols if col in high_priority.columns]
+        
+        if return_cols:
+            return high_priority[return_cols]
+        else:
+            return high_priority
     
     def get_domain_insights(self):
         """Get insights by research domain"""

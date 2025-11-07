@@ -56,11 +56,13 @@ class DataAgent:
         if df.empty:
             raise DataValidationError(f"CSV file '{filename}' is empty")
         
-        # Validate expected columns if provided
+        # Validate expected columns if provided (warn but don't fail)
         if expected_columns:
             missing = set(expected_columns) - set(df.columns)
             if missing:
-                issues.append(f"Missing required columns: {', '.join(missing)}")
+                # Log warning but don't treat as error - allow processing to continue
+                logger.warning(f"Expected columns not found: {', '.join(missing)}. Processing will continue with available columns.")
+                # Don't add to issues list - just log a warning
         
         # Check for completely empty columns
         empty_cols = [col for col in df.columns if df[col].isna().all()]
@@ -229,7 +231,32 @@ class DataAgent:
                 elif 'paper' in filename or 'research' in filename:
                     dataset_type = 'papers'
                 else:
-                    raise ValueError("Could not determine dataset type from filename. Please specify explicitly.")
+                    # Try to auto-detect by reading the CSV and checking columns
+                    try:
+                        df_temp = pd.read_csv(file_path, nrows=1)  # Read just first row to check columns
+                        columns_lower = [col.lower() for col in df_temp.columns]
+                        
+                        # Check for thesis-specific columns
+                        thesis_indicators = ['section_title', 'level', 'estimated_pages', 'priority_for_extraction', 'difficulty_score']
+                        # Check for papers-specific columns
+                        papers_indicators = ['title', 'year', 'domain', 'citations', 'readability_score']
+                        
+                        thesis_match = sum(1 for ind in thesis_indicators if any(ind in col for col in columns_lower))
+                        papers_match = sum(1 for ind in papers_indicators if any(ind in col for col in columns_lower))
+                        
+                        if thesis_match >= 2:
+                            dataset_type = 'thesis'
+                            logger.info(f"Auto-detected dataset type as 'thesis' based on columns")
+                        elif papers_match >= 2:
+                            dataset_type = 'papers'
+                            logger.info(f"Auto-detected dataset type as 'papers' based on columns")
+                        else:
+                            # Default to thesis if we can't determine
+                            dataset_type = 'thesis'
+                            logger.warning(f"Could not determine dataset type, defaulting to 'thesis'. Columns found: {list(df_temp.columns)}")
+                    except Exception as e:
+                        logger.warning(f"Error during auto-detection: {e}, defaulting to 'thesis'")
+                        dataset_type = 'thesis'
             
             # Expected columns based on type
             expected_columns = {

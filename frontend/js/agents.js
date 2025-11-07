@@ -3,6 +3,8 @@
  * Handles agent coordination, task distribution, and status updates
  */
 
+const API_BASE_URL = 'http://localhost:5000';
+
 class AgentManager {
     constructor() {
         this.agents = {
@@ -277,20 +279,115 @@ class DataAgent extends BaseAgent {
     constructor() {
         super('DataAgent', ['data_processing', 'data_cleaning', 'data_validation']);
         this.status = 'online';
+        this.setupFileUpload();
+    }
+
+    setupFileUpload() {
+        // Add file upload UI if not exists
+        if (!document.getElementById('fileUpload')) {
+            const uploadDiv = document.createElement('div');
+            uploadDiv.className = 'file-upload-section mt-3';
+            uploadDiv.innerHTML = `
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Upload CSV File</h5>
+                        <input type="file" id="fileUpload" class="form-control" accept=".csv" />
+                        <div class="progress mt-2 d-none">
+                            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <div id="uploadStatus" class="mt-2"></div>
+                    </div>
+                </div>
+            `;
+            document.querySelector('.agent-workspace').appendChild(uploadDiv);
+            
+            // Add event listener
+            document.getElementById('fileUpload').addEventListener('change', (e) => this.handleFileUpload(e));
+        }
+    }
+
+    async handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        if (!file.name.endsWith('.csv')) {
+            this.showUploadStatus('Error: Please select a CSV file', 'error');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            this.showUploadStatus('Uploading file...', 'info');
+            this.updateProgress(10);
+
+            const response = await fetch(`${API_BASE_URL}/api/upload`, {
+                method: 'POST',
+                body: formData,
+                mode: 'cors'
+            });
+
+            this.updateProgress(50);
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                this.showUploadStatus('File processed successfully!', 'success');
+                this.updateProgress(100);
+                this.log(`Successfully processed ${file.name}`);
+                this.status = 'processing';
+            } else {
+                this.showUploadStatus(`Error: ${result.message}`, 'error');
+                this.updateProgress(0);
+                this.log(`Error processing ${file.name}: ${result.message}`);
+            }
+        } catch (error) {
+            this.showUploadStatus('Error uploading file', 'error');
+            this.updateProgress(0);
+            this.log(`Error uploading file: ${error.message}`);
+        }
+    }
+
+    showUploadStatus(message, type) {
+        const statusDiv = document.getElementById('uploadStatus');
+        if (statusDiv) {
+            statusDiv.className = `alert alert-${type === 'error' ? 'danger' : type}`;
+            statusDiv.textContent = message;
+        }
+    }
+
+    updateProgress(percent) {
+        const progressBar = document.querySelector('.progress');
+        const progressBarInner = document.querySelector('.progress-bar');
+        if (progressBar && progressBarInner) {
+            progressBar.classList.remove('d-none');
+            progressBarInner.style.width = `${percent}%`;
+            progressBarInner.setAttribute('aria-valuenow', percent);
+        }
     }
 
     async performTask(task) {
         if (task.type === 'data_processing') {
-            await this.processData();
+            await this.processData(task);
         }
     }
 
-    async processData() {
-        // Simulate data processing
-        for (let i = 0; i <= 100; i += 10) {
-            this.progress = i;
-            await this.delay(500);
-            this.log(`Processing data... ${i}%`);
+    async processData(task) {
+        this.log(`Processing data from ${task.input_file}`);
+        this.status = 'processing';
+        
+        try {
+            for (let i = 0; i <= 100; i += 20) {
+                this.progress = i;
+                await this.delay(500);
+                this.log(`Processing ${task.dataset_type} data... ${i}%`);
+            }
+            
+            this.log(`Data processing complete. Output saved to ${task.output_file}`);
+            this.status = 'online';
+        } catch (error) {
+            this.log(`Error processing data: ${error.message}`);
+            this.status = 'error';
         }
     }
 
@@ -475,4 +572,89 @@ function updateDashboardMetrics() {
             element.textContent = value;
         }
     });
+}
+
+// Upload CSV file and trigger data processing task on backend
+function uploadCSV() {
+    alert('Please select a CSV file to upload for data processing.');
+    // create a hidden file input
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv,text/csv';
+    input.style.display = 'none';
+
+    input.addEventListener('change', async (event) => {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+
+        // simple file size guard (e.g., 10 MB)
+        const maxSize = 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+            alert('Selected file is too large. Please upload a file smaller than 10 MB.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const text = e.target.result;
+
+                // Show a quick UI notification
+                if (agentManager) agentManager.showNotification('Uploading CSV and queuing data processing...', 'info');
+
+                // POST to backend as a data_processing task with CSV content in parameters
+                // Backend currently accepts /api/tasks JSON; we include csv text in parameters
+                const payload = {
+                    type: 'data_processing',
+                    parameters: {
+                        filename: file.name,
+                        csv: text
+                    }
+                };
+
+                const resp = await fetch(`${API_BASE_URL}/api/tasks`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!resp.ok) {
+                    const body = await resp.text();
+                    throw new Error(`Upload failed: ${resp.status} ${body}`);
+                }
+
+                const data = await resp.json();
+
+                // Optionally reflect in the local task queue
+                if (agentManager) {
+                    agentManager.addTask({ name: `Upload: ${file.name}`, type: 'data_processing', parameters: { filename: file.name } });
+                    agentManager.showNotification('CSV uploaded and task queued (backend id: ' + (data.task_id || '?') + ')', 'success');
+                    agentManager.updateTaskQueueUI();
+                } else {
+                    alert('CSV uploaded and task queued.');
+                }
+
+            } catch (err) {
+                console.error('uploadCSV error', err);
+                if (agentManager) agentManager.showNotification('CSV upload failed: ' + err.message, 'danger');
+                else alert('CSV upload failed: ' + err.message);
+            }
+        };
+
+        reader.onerror = (err) => {
+            console.error('FileReader error', err);
+            if (agentManager) agentManager.showNotification('Failed to read file', 'danger');
+        };
+
+        reader.readAsText(file);
+    });
+
+    // attach and click
+    document.body.appendChild(input);
+    input.click();
+
+    // cleanup after a short delay
+    setTimeout(() => {
+        document.body.removeChild(input);
+    }, 2000);
 }

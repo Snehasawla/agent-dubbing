@@ -16,8 +16,7 @@ from pathlib import Path
 
 # Import our custom modules
 import sys
-from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent / 'src'))
+sys.path.append('../src')
 from data_processor import DataProcessor
 from thesis_analyzer import ThesisAnalyzer
 from data_agent import DataAgent
@@ -33,10 +32,9 @@ app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__fil
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Global instances
-data_dir = Path(__file__).parent.parent / 'data'
-os.makedirs(data_dir, exist_ok=True)  # Ensure data directory exists
-data_agent = DataAgent(str(data_dir))
+data_processor = DataProcessor()
 thesis_analyzer = ThesisAnalyzer()
+data_agent = DataAgent()  # Create global data_agent instance
 agent_status = {}
 task_queue = []
 completed_tasks = []
@@ -315,6 +313,46 @@ def create_task():
     if not task_type:
         return jsonify({'error': 'Task type is required'}), 400
     
+    # Handle CSV upload via JSON (from uploadCSV function)
+    if task_type == 'data_processing' and 'csv' in parameters and 'filename' in parameters:
+        try:
+            # Save CSV content to a temporary file
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"{timestamp}_{parameters['filename']}"
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            
+            # Ensure upload directory exists
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+            
+            # Write CSV content to file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(parameters['csv'])
+            
+            # Get dataset_type from parameters if provided, otherwise let it auto-detect
+            dataset_type = parameters.get('dataset_type')
+            
+            # Process the uploaded CSV
+            result = data_agent.process_uploaded_csv(file_path, dataset_type=dataset_type)
+            
+            # Update parameters with processing results
+            if result['status'] == 'success':
+                parameters['input_file'] = result['input_file']
+                parameters['output_file'] = result['output_file']
+                parameters['dataset_type'] = result['dataset_type']
+            else:
+                return jsonify({
+                    'error': f"CSV processing failed: {result.get('error', 'Unknown error')}",
+                    'task_id': None,
+                    'status': 'error'
+                }), 400
+            
+        except Exception as e:
+            return jsonify({
+                'error': f"Error processing CSV: {str(e)}",
+                'task_id': None,
+                'status': 'error'
+            }), 500
+    
     task_id = coordinator.add_task(task_type, parameters)
     return jsonify({'task_id': task_id, 'status': 'queued'})
 
@@ -439,11 +477,11 @@ def upload_file():
 
 if __name__ == '__main__':
     # Create necessary directories
-    for dir_path in ['reports', 'data/processed', 'data/uploads', 'data/raw', 'data/validation']:
-        os.makedirs(os.path.join(os.path.dirname(__file__), '..', dir_path), exist_ok=True)
+    os.makedirs('../reports', exist_ok=True)
+    os.makedirs('../data/processed', exist_ok=True)
     
     print("🚀 Starting Debugging Agents Research Platform...")
     print("📊 Multi-agent system initialized")
-    print("🌐 Web interface available at http://localhost:5001")
+    print("🌐 Web interface available at http://localhost:5000")
     
-    app.run(debug=True, host='localhost', port=5002)
+    app.run(debug=True, host='0.0.0.0', port=5000)
