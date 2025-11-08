@@ -84,6 +84,9 @@ class AgentManager {
             this.activeTasks.set(task.id, { agentId, task, startTime: Date.now() });
             agent.executeTask(task);
             this.updateTaskQueueUI();
+
+            // Start tracking task progress so UI stays in sync
+            this.trackTaskProgress(task.id, agentId);
         }
     }
 
@@ -91,10 +94,61 @@ class AgentManager {
         task.id = this.generateTaskId();
         this.taskQueue.push(task);
         this.updateTaskQueueUI();
+        this.showNotification(`Task added: ${task.name || task.type}`, 'info');
+        this.processTaskQueue();
     }
 
     generateTaskId() {
         return 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    trackTaskProgress(taskId, agentId) {
+        const agent = this.agents[agentId];
+        if (!agent) return;
+
+        const interval = setInterval(() => {
+            const statusInfo = this.agentStatus.get(agentId);
+            const taskInfo = this.activeTasks.get(taskId);
+
+            if (!statusInfo || !taskInfo) {
+                clearInterval(interval);
+                this.updateTaskQueueUI();
+                return;
+            }
+
+            // Update task progress if available
+            taskInfo.task.progress = statusInfo.progress || 0;
+            this.updateTaskQueueUI();
+
+            if (statusInfo.status === 'idle' || statusInfo.progress === 100) {
+                clearInterval(interval);
+                this.activeTasks.delete(taskId);
+                taskInfo.task.status = 'Completed';
+                this.updateTaskQueueUI();
+                this.showNotification(`Task completed: ${taskInfo.task.name || taskInfo.task.type}`, 'success');
+
+                // Inform user that backend queues visualization automatically
+                if (taskInfo.task.type === 'statistical_analysis' && taskInfo.task.parameters?.cleaned_file) {
+                    this.showNotification('Visualization task queued automatically by backend.', 'info');
+                }
+
+                if (taskInfo.task.type === 'statistical_analysis') {
+                    if (typeof window.showSection === 'function') {
+                        window.showSection('analysis');
+                    }
+                    if (window.appController) {
+                        // Give the UI a moment to switch sections before loading data
+                        setTimeout(() => {
+                            if (window.appController.refreshAnalysis) {
+                                window.appController.refreshAnalysis();
+                            } else {
+                                window.appController.loadAnalysisData();
+                            }
+                        }, 300);
+                    }
+                }
+            }
+        }, 1000);
     }
 
     updateTaskQueueUI() {
@@ -200,12 +254,112 @@ class AgentManager {
         
         document.body.appendChild(notification);
         
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
+        // Auto-remove after 5 seconds (except for progress notifications)
+        if (type !== 'progress') {
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 5000);
+        }
+        
+        return notification;
+    }
+
+    async monitorAnalysisProgress(taskId, filename) {
+        /**Monitor analysis progress and update UI*/
+        let progressCheckInterval = null;
+        let progressNotification = null;
+        
+        const checkProgress = async () => {
+            try {
+                // Check task status
+                const taskResp = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/status`);
+                if (taskResp.ok) {
+                    const taskStatus = await taskResp.json();
+                    
+                    // Update or create progress notification
+                    if (!progressNotification) {
+                        progressNotification = this.showNotification(
+                            `Analyzing ${filename}... 0%`, 
+                            'info'
+                        );
+                        progressNotification.classList.add('progress-notification');
+                    }
+                    
+                    const progress = taskStatus.progress || 0;
+                    const status = taskStatus.status || 'unknown';
+                    
+                    // Update notification
+                    const message = status === 'completed' 
+                        ? `✅ Analysis completed for ${filename}!`
+                        : status === 'failed'
+                        ? `❌ Analysis failed for ${filename}`
+                        : `Analyzing ${filename}... ${progress}%`;
+                    
+                    progressNotification.innerHTML = `
+                        ${message}
+                        ${status === 'in_progress' ? `<div class="progress mt-2" style="height: 5px;">
+                            <div class="progress-bar" role="progressbar" style="width: ${progress}%"></div>
+                        </div>` : ''}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    
+                    // Stop monitoring if completed or failed
+                    if (status === 'completed' || status === 'failed') {
+                        if (progressCheckInterval) {
+                            clearInterval(progressCheckInterval);
+                        }
+                        
+                        // Remove progress notification after 10 seconds
+                        setTimeout(() => {
+                            if (progressNotification && progressNotification.parentNode) {
+                                progressNotification.parentNode.removeChild(progressNotification);
+                            }
+                        }, 10000);
+                        
+                        // If completed, show success and offer to view results
+                        if (status === 'completed') {
+                            this.showNotification(
+                                `Analysis completed! Click here to view results.`, 
+                                'success'
+                            );
+
+                            // Automatically navigate to analysis view and refresh data
+                            if (typeof window.showSection === 'function') {
+                                window.showSection('analysis');
+                            }
+                            if (window.appController) {
+                                // Give the UI a moment to switch sections before loading data
+                                setTimeout(() => {
+                                    if (window.appController.refreshAnalysis) {
+                                        window.appController.refreshAnalysis();
+                                    } else {
+                                        window.appController.loadAnalysisData();
+                                    }
+                                }, 300);
+                            }
+                        }
+                    }
+                }
+                
+                // Also check analysis agent progress
+                const agentResp = await fetch(`${API_BASE_URL}/api/agents/analysis/progress`);
+                if (agentResp.ok) {
+                    const agentProgress = await agentResp.json();
+                    console.log('Analysis Agent Progress:', agentProgress);
+                }
+                
+            } catch (error) {
+                console.error('Error checking progress:', error);
             }
-        }, 5000);
+        };
+        
+        // Check progress every 2 seconds
+        progressCheckInterval = setInterval(checkProgress, 2000);
+        
+        // Initial check
+        checkProgress();
     }
 }
 
@@ -500,6 +654,24 @@ function selectAgent(agentId) {
     
     // Show agent details
     showAgentDetails(agentId);
+
+    // If user selects the analysis agent from the Agents screen,
+    // immediately switch to the analysis section and refresh the data.
+    if (agentId === 'analysis' || agentId === 'analysis_agent') {
+        if (typeof window.showSection === 'function') {
+            window.showSection('analysis');
+        }
+        if (window.appController) {
+            // Give the UI a tiny delay to switch sections before loading data
+            setTimeout(() => {
+                if (window.appController.refreshAnalysis) {
+                    window.appController.refreshAnalysis();
+                } else if (window.appController.loadAnalysisData) {
+                    window.appController.loadAnalysisData();
+                }
+            }, 200);
+        }
+    }
 }
 
 function showAgentDetails(agentId) {
@@ -628,7 +800,19 @@ function uploadCSV() {
                 // Optionally reflect in the local task queue
                 if (agentManager) {
                     agentManager.addTask({ name: `Upload: ${file.name}`, type: 'data_processing', parameters: { filename: file.name } });
-                    agentManager.showNotification('CSV uploaded and task queued (backend id: ' + (data.task_id || '?') + ')', 'success');
+                    
+                    // Show success message
+                    if (data.status === 'success') {
+                        agentManager.showNotification('CSV uploaded and processing started!', 'success');
+                        
+                        // If analysis task ID is available, monitor its progress
+                        if (data.analysis_task_id) {
+                            agentManager.monitorAnalysisProgress(data.analysis_task_id, file.name);
+                        }
+                    } else {
+                        agentManager.showNotification('CSV uploaded and task queued (backend id: ' + (data.task_id || '?') + ')', 'success');
+                    }
+                    
                     agentManager.updateTaskQueueUI();
                 } else {
                     alert('CSV uploaded and task queued.');

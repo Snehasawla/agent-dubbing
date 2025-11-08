@@ -1,12 +1,23 @@
 [
   {
-    "timestamp": "2025-11-08T00:07:53.157940",
+    "timestamp": "2025-11-08T14:35:41.197303",
     "dataset_type": "thesis",
-    "rows_before": 11309,
-    "rows_after": 11309,
+    "rows_before": 10388,
+    "rows_after": 10388,
     "columns_before": 9,
     "columns_after": 9,
-    "original_hash": "fe54fdf6a60102eafbc959a832b6fd3f",
-    "cleaned_hash": "fe54fdf6a60102eafbc959a832b6fd3f"
+    "rows_removed": 0,
+    "columns_removed": 0,
+    "null_removal_stats": {
+      "rows_removed": 0,
+      "columns_removed": [],
+      "nulls_filled": 0
+    },
+    "outlier_removal_stats": {
+      "outliers_removed": 0,
+      "columns_processed": []
+    },
+    "original_hash": "d327e0a2a06812f090859a5163949cd2",
+    "cleaned_hash": "d327e0a2a06812f090859a5163949cd2"
   }
 ]

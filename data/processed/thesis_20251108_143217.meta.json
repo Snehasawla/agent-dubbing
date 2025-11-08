@@ -1,0 +1,28 @@
+{
+  "exported_at": "2025-11-08T14:32:17.366630",
+  "rows": 11308,
+  "columns": 9,
+  "data_types": {
+    "Pseudo-Julian-Date": "object",
+    "Date": "object",
+    "Time": "object",
+    "Temperature": "object",
+    "Dewpoint": "object",
+    "Relhum": "object",
+    "Speed": "object",
+    "Gust": "object",
+    "Pressure": "object"
+  },
+  "null_counts": {
+    "Pseudo-Julian-Date": 0,
+    "Date": 0,
+    "Time": 0,
+    "Temperature": 0,
+    "Dewpoint": 0,
+    "Relhum": 0,
+    "Speed": 0,
+    "Gust": 0,
+    "Pressure": 0
+  },
+  "data_hash": "2ea18f0c514fd787566350fc728fe7d2"
+}

@@ -4,6 +4,7 @@ Analyzes synthetic thesis data and generates comprehensive reports.
 """
 
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
@@ -19,16 +20,161 @@ class ThesisAnalyzer:
         self.papers_data = None
         self.load_data()
     
+    def _make_serializable(self, obj):
+        """Recursively convert numpy/pandas objects into JSON-serializable primitives."""
+        if isinstance(obj, dict):
+            return {self._make_serializable(key): self._make_serializable(value) for key, value in obj.items()}
+        if isinstance(obj, (list, tuple, set)):
+            return [self._make_serializable(item) for item in obj]
+        if isinstance(obj, (np.integer,)):
+            return int(obj)
+        if isinstance(obj, (np.floating,)):
+            # Preserve NaN as None so JSON serialization succeeds
+            value = float(obj)
+            return None if np.isnan(value) else value
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if isinstance(obj, np.ndarray):
+            return [self._make_serializable(item) for item in obj.tolist()]
+        return obj
+
     def load_data(self):
         """Load the synthetic datasets"""
         try:
-            self.thesis_data = pd.read_csv(self.data_path / "debugging_agents_synthetic_annotations.csv")
-            self.papers_data = pd.read_csv(self.data_path / "synthetic_pdf_papers_dataset.csv")
-            print("✅ Data loaded successfully")
-            print(f"Thesis sections: {len(self.thesis_data)}")
-            print(f"Academic papers: {len(self.papers_data)}")
+            thesis_file = self.data_path / "debugging_agents_synthetic_annotations.csv"
+            papers_file = self.data_path / "synthetic_pdf_papers_dataset.csv"
+            
+            if thesis_file.exists():
+                self.thesis_data = pd.read_csv(thesis_file)
+            if papers_file.exists():
+                self.papers_data = pd.read_csv(papers_file)
+            
+            if self.thesis_data is not None or self.papers_data is not None:
+                print("✅ Data loaded successfully")
+                if self.thesis_data is not None:
+                    print(f"Thesis sections: {len(self.thesis_data)}")
+                if self.papers_data is not None:
+                    print(f"Academic papers: {len(self.papers_data)}")
         except FileNotFoundError as e:
             print(f"❌ Error loading data: {e}")
+    
+    def analyze_uploaded_data(self, file_path, dataset_type='thesis'):
+        """
+        Analyze uploaded and cleaned data file
+        
+        Args:
+            file_path: Path to the cleaned CSV file
+            dataset_type: Type of dataset ('thesis' or 'papers')
+        
+        Returns:
+            Dictionary with analysis results
+        """
+        try:
+            # Load the cleaned data
+            df = pd.read_csv(file_path)
+            
+            analysis_results = {
+                'dataset_type': dataset_type,
+                'file_path': str(file_path),
+                'total_rows': len(df),
+                'total_columns': len(df.columns),
+                'columns': list(df.columns),
+                'data_types': df.dtypes.astype(str).to_dict(),
+                'basic_statistics': {},
+                'data_quality': {},
+                'insights': []
+            }
+            
+            # Basic statistics for numeric columns
+            numeric_cols = df.select_dtypes(include=[np.number]).columns
+            if len(numeric_cols) > 0:
+                analysis_results['basic_statistics'] = df[numeric_cols].describe().to_dict()
+            
+            # Data quality metrics
+            analysis_results['data_quality'] = {
+                'null_percentage': (df.isnull().sum().sum() / (len(df) * len(df.columns)) * 100) if len(df) > 0 else 0,
+                'duplicate_rows': df.duplicated().sum(),
+                'unique_values_per_column': {col: df[col].nunique() for col in df.columns}
+            }
+            
+            # Dataset-specific analysis
+            if dataset_type == 'thesis':
+                analysis_results.update(self._analyze_thesis_data(df))
+            elif dataset_type == 'papers':
+                analysis_results.update(self._analyze_papers_data(df))
+            else:
+                # Generic analysis for unknown dataset types
+                analysis_results.update(self._analyze_generic_data(df))
+            
+            return self._make_serializable(analysis_results)
+            
+        except Exception as e:
+            return {
+                'error': str(e),
+                'dataset_type': dataset_type,
+                'file_path': str(file_path)
+            }
+    
+    def _analyze_thesis_data(self, df):
+        """Analyze thesis-specific data"""
+        analysis = {}
+        
+        if 'level' in df.columns:
+            analysis['level_distribution'] = df['level'].value_counts().sort_index().to_dict()
+        
+        if 'priority_for_extraction' in df.columns:
+            analysis['priority_distribution'] = df['priority_for_extraction'].value_counts().to_dict()
+        
+        if 'difficulty_score' in df.columns:
+            analysis['difficulty_stats'] = df['difficulty_score'].describe().to_dict()
+        
+        if 'estimated_pages' in df.columns:
+            analysis['total_pages'] = float(df['estimated_pages'].sum())
+        
+        return self._make_serializable(analysis)
+    
+    def _analyze_papers_data(self, df):
+        """Analyze papers-specific data"""
+        analysis = {}
+        
+        if 'year' in df.columns:
+            analysis['year_distribution'] = df['year'].value_counts().sort_index().to_dict()
+        
+        if 'domain' in df.columns:
+            analysis['domain_distribution'] = df['domain'].value_counts().to_dict()
+        
+        if 'citations' in df.columns:
+            analysis['citation_stats'] = df['citations'].describe().to_dict()
+        
+        if 'readability_score' in df.columns:
+            analysis['readability_stats'] = df['readability_score'].describe().to_dict()
+        
+        return self._make_serializable(analysis)
+    
+    def _analyze_generic_data(self, df):
+        """Generic analysis for any dataset"""
+        analysis = {
+            'insights': []
+        }
+        
+        # Find potential key columns
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        categorical_cols = df.select_dtypes(include=['object']).columns
+        
+        if len(numeric_cols) > 0:
+            analysis['numeric_summary'] = df[numeric_cols].describe().to_dict()
+            analysis['insights'].append(f"Dataset contains {len(numeric_cols)} numeric columns")
+        
+        if len(categorical_cols) > 0:
+            analysis['categorical_summary'] = {
+                col: {
+                    'unique_count': df[col].nunique(),
+                    'most_common': df[col].value_counts().head(5).to_dict()
+                } for col in categorical_cols[:5]  # Limit to first 5 categorical columns
+            }
+            analysis['insights'].append(f"Dataset contains {len(categorical_cols)} categorical columns")
+        
+        return self._make_serializable(analysis)
     
     def analyze_thesis_structure(self):
         """Analyze thesis section structure and priorities"""
@@ -55,12 +201,12 @@ class ThesisAnalyzer:
             'sections_with_limitations': self.thesis_data['has_limitations'].sum()
         }
         
-        return {
-            'level_distribution': level_dist,
-            'priority_distribution': priority_dist,
-            'difficulty_stats': difficulty_stats,
+        return self._make_serializable({
+            'level_distribution': level_dist.to_dict(),
+            'priority_distribution': priority_dist.to_dict(),
+            'difficulty_stats': difficulty_stats.to_dict(),
             'content_analysis': content_analysis
-        }
+        })
     
     def analyze_research_trends(self):
         """Analyze academic paper trends and patterns"""
@@ -83,12 +229,12 @@ class ThesisAnalyzer:
         # Code presence analysis
         code_analysis = self.papers_data.groupby('domain')['has_code'].mean().round(3)
         
-        return {
-            'domain_distribution': domain_dist,
-            'year_trends': year_trends,
-            'readability_by_domain': readability_by_domain,
-            'code_analysis': code_analysis
-        }
+        return self._make_serializable({
+            'domain_distribution': domain_dist.to_dict(),
+            'year_trends': year_trends.to_dict(),
+            'readability_by_domain': readability_by_domain.to_dict(),
+            'code_analysis': code_analysis.to_dict()
+        })
     
     def create_visualizations(self):
         """Create comprehensive visualizations"""

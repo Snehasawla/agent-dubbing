@@ -212,6 +212,14 @@
             color: white;
             margin: 0 auto 15px;
         }
+
+        .mermaid-diagram {
+            min-height: 200px;
+            background-color: #1f2933;
+            border-radius: 8px;
+            padding: 10px;
+            overflow-x: auto;
+        }
     </style>
 </head>
 <body>
@@ -471,6 +479,53 @@
                 <!-- Analysis Section -->
                 <div id="analysis" class="content-section" style="display: none;">
                     <h2><i class="fas fa-chart-bar me-2"></i>Analysis Results</h2>
+                    <div class="row" id="analysisProgressRow">
+                        <div class="col-lg-4 mb-3">
+                            <div class="card bg-dark h-100">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0"><i class="fas fa-robot me-2"></i>Analysis Agent</h5>
+                                    <span class="badge bg-secondary" id="analysisAgentStatusBadge">Idle</span>
+                                </div>
+                                <div class="card-body" id="analysisAgentStatus">
+                                    <p class="text-muted mb-0">Upload a CSV to see analysis progress.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-4 mb-3">
+                            <div class="card bg-dark h-100">
+                                <div class="card-header">
+                                    <h5 class="mb-0"><i class="fas fa-list me-2"></i>Task Queue</h5>
+                                </div>
+                                <div class="card-body" id="analysisTaskList">
+                                    <p class="text-muted mb-0">No analysis tasks in progress.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-4 mb-3">
+                            <div class="card bg-dark h-100">
+                                <div class="card-header">
+                                    <h5 class="mb-0"><i class="fas fa-terminal me-2"></i>Recent Logs</h5>
+                                </div>
+                                <div class="card-body" id="analysisLogs" style="max-height: 260px; overflow-y: auto;">
+                                    <p class="text-muted mb-0">Logs will appear once analysis starts.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <div class="card bg-dark h-100">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0"><i class="fas fa-project-diagram me-2"></i>Agent Orchestration Graph</h5>
+                                    <span class="badge bg-secondary" id="agentGraphStatusBadge">Loading</span>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted" id="agentGraphMessage">Graph metadata will appear once LangGraph is available.</p>
+                                    <div id="agentGraphMermaid" class="mermaid-diagram"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="chart-container">
                         <div id="analysisCharts"></div>
                     </div>
@@ -573,6 +628,12 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        if (window.mermaid) {
+            window.mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
+        }
+    </script>
     <script src="js/agents.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/main.js"></script>
